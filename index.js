@@ -48,10 +48,7 @@ slackEvents.on('message', (event)=> {
     }
 
     var target = splitted[0].substring(2, splitted[0].length - 1);
-    console.log(target);
-
     var remainingText = splitted.slice(1).join(' ');
-    remainingText = `Someone said: ${remainingText}`;
     console.log(target);
     request({
       uri: `${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`,
@@ -77,24 +74,38 @@ slackEvents.on('message', (event)=> {
                   }
                 }, (error, response2) => {
                   const receiver_name= JSON.parse(response2.body).user.name;
-                  let chatId;
-                  saveSession({sender_name: `@${sender_name}`,
-                                              sender: event.user,
-                                              receiver: target,
-                                              receiver_name: `@${receiver_name}`})
-                                              .then(res => {
-                                                  chatId=res;
-                                              });
-                  const payloadInitConversation = { channel: target,
-                                                    text: `Start an anonymous chat with ${chatId}`}
-                  senderMessages(payloadInitConversation);
-                  const payloadOption = { channel: target, text: remainingText }
-                  senderMessages(payloadOption);
+                  const display_receiver_name = JSON.parse(response2.body).user.profile.display_name_normalized;
+                  db.count({}, function(countRegisters, errorCountRegisters) {
+                    const idRegister = countRegisters ? countRegisters + 1 : 1;
+                    const chatId = `${parseInt(Math.random() * (1000 - 1) + 1)}${idRegister}`
+
+                    saveSession({ name: chatId,
+                                  sender_name: `@${sender_name}`,
+                                  sender: event.user,
+                                  receiver: target,
+                                  receiver_name: `@${receiver_name}`,
+                                  display_receiver_name: `@${display_receiver_name}`})
+                    const payloadInitConversation = { channel: target,
+                                                      text: `Start an anonymous chat with ${chatId}`}
+
+                    db.current_receivers.find({receiver: target}, function(errorReceiver, docsLastReceiver) {
+                      if(!docsLastReceiver || !docsLastReceiver[0]) {
+                        db.current_receivers.insert({ receiver: target, current_session: chatId });
+
+                      }
+                    });
+
+                    senderMessages(payloadInitConversation);
+                    const payloadOption = { channel: target, text: `Someone with anonymous id ${chatId} said: ${remainingText}` }
+                    senderMessages(payloadOption);
+                  });
+
 
                 });
           } else {
             console.log('sending messages');
-            const payloadOption = { channel: target, text: remainingText }
+            const payloadOption = { channel: target,
+                                    text: `Someone with anonymous id ${docs[0].name} said: ${remainingText}` }
             senderMessages(payloadOption);
           }
         });
@@ -105,12 +116,57 @@ slackEvents.on('message', (event)=> {
     })
 
   } else {
+    let payloadOption;
     db.find({receiver: event.user }, function(err, docs) {
-      if(docs && docs[0] && docs[0].sender_name) {
-        console.log(docs);
-        const payloadOption = { channel: docs[0].sender_name, text: `${docs[0].receiver_name} says: ${event.text}` }
+      if(docs && docs.length === 1 && docs[0].sender_name) {
+        let remainingText = event.text;
+        if(event.text.split(" ")[0].substring(event.text.split(" ")[0].length - 4 , event.text.split(" ")[0].length) === '&gt;') {
+          var splitted = event.text.split(" ");
+          remainingText = splitted.slice(1).join(' ');
 
+        }
+
+        payloadOption = { channel: docs[0].sender_name, text: `${docs[0].display_receiver_name} says: ${remainingText}` }
         senderMessages(payloadOption, '', docs);
+      } else {
+        var splitted = event.text.split(" ");
+        console.log(splitted);
+        if(docs && docs.length > 1 && splitted[0].substring(splitted[0].length - 4, splitted[0].length) === '&gt;') {
+          var splitted = event.text.split(" ");
+          if (splitted.length <= 1) {
+              return createError(getUsageHelp(command));
+          }
+          var session = splitted[0].substring(0, splitted[0].length - 4);
+          console.log(`Esto es la session ${session}`);
+          var remainingText = splitted.slice(1).join(' ');
+
+          const currentSender = docs.find(doc => doc.name === session);
+          if(currentSender) {
+            payloadOption = { channel: currentSender.sender_name, text: `${currentSender.receiver_name} says: ${remainingText}` }
+
+            db.current_receivers.find({receiver: currentSender.receiver}, function(errorReceiver, docsReceiver) {
+              db.current_receivers.update({_id: docsReceiver[0]._id},
+                                          {$set: {receiver: currentSender.receiver, current_session: session}},
+                                          {}, function (err, numReplaced) {
+
+                                            if(payloadOption) {
+                                              console.log(payloadOption);
+                                              senderMessages(payloadOption);
+                                            }
+              });
+            });
+          }
+        } else if (docs && docs.length > 1) {
+          db.current_receivers.find({receiver: event.user}, function(errorReceiver, receivers) {
+            console.log(docs);
+            console.log(receivers);
+            const currentSender = docs.find(doc => doc.name === receivers[0].current_session);
+            payloadOption = { channel: currentSender.sender, text: `${currentSender.display_receiver_name} says: ${event.text}` }
+            console.log(currentSender);
+            senderMessages(payloadOption);
+
+          });
+        }
       }
     })
   }
@@ -190,31 +246,6 @@ app.post('/', (req, response) => {
 
   console.log(`Someone with the user_id ${req.body.user_id} is trying to send to ${payloadOption.channel}`);
 
-  if(payloadOption.channel[0]==='@') {
-    request({
-        uri: `${SLACK_URL_INFO_USERS}?user=${req.body.user_id}&pretty=1`,
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${process.env.TOKEN}`
-        }
-      }, (error, res) => {
-        db.find({sender_name: `@${JSON.parse(res.body).user.name}`,
-                 sender: req.body.user_id,
-                 receiver: payloadOption.channel}, function(err, docs) {
-
-                    if(docs && docs.length > 0) {
-                      response.end(`You have a chat or the person has a open chat`);
-
-                    }
-
-        });
-
-        saveSession({sender_name: `@${JSON.parse(res.body).user.name}`,
-                     sender: req.body.user_id,
-                     receiver_name: payloadOption.channel});
-
-      });
-  }
 
   senderMessages(payloadOption, response);
 });
@@ -250,7 +281,7 @@ const senderMessages = (payloadOption, response, doc) => {
       } else {
         if (response) {
           response.end('Delivered! :cop:');
-          db.update(doc, {date: new Date()},function(){
+          db.update(doc, {$set:{date: new Date()}},function(){
 
           });
         }
@@ -259,23 +290,17 @@ const senderMessages = (payloadOption, response, doc) => {
 }
 
 const saveSession = (data) => {
-  return db.find({},(err, res) => {
-    if(res) {
-      const chatId = (res && res.length > 0) ? res.length + 1 : 1;
-      db.insert({ name: chatId,
+      db.insert({ name: data.name,
                  sender: data.sender,
                  sender_name: data.sender_name,
                  receiver: data.receiver,
                  receiver_name: data.receiver_name,
+                 display_receiver_name: data.display_receiver_name,
                  date: new Date() }, function (err, docs) {
                    if(err) {
                      console.log(err);
                    }
                  });
-      return chatId;
-    }
-
-  });
 
 }
 
@@ -300,7 +325,20 @@ var j = schedule.scheduleJob('* * * * *', function(fireDate){
         senderMessages(finishMessageReceiver);
 
         db.remove({ _id: doc._id }, {}, function (err, numRemoved) {
-          // numRemoved = 1
+          db.find({receiver: doc.receiver}, function(errorReceiver, docsNewReceiver) {
+            if(docsNewReceiver) {
+              db.current_receivers.find({receiver: docsNewReceiver[0].receiver}, function(errorReceiver, docsLastReceiver) {
+                db.current_receivers.update({_id: docsLastReceiver[0]._id},
+                                            {$set:{receiver: docsNewReceiver[0].receiver, current_session: docsNewReceiver[0].name}},
+                                            {}, function (err, numReplaced) {
+                    const payloadOptionNotification = { channel: docsNewReceiver[0].receiver,
+                                                      text: `You are switched to ${docsNewReceiver[0].name}`}
+                    senderMessages(payloadOptionNotification);
+                });
+              });
+
+            }
+          });
         });
       }
     })
