@@ -77,15 +77,21 @@ slackEvents.on('message', (event)=> {
                   }
                 }, (error, response2) => {
                   const receiver_name= JSON.parse(response2.body).user.name;
-                  const chatId = await saveSession({sender_name: `@${sender_name}`,
-                                              sender: event.user,
-                                              receiver: target,
-                                              receiver_name: `@${receiver_name}`});
-                  const payloadInitConversation = { channel: target,
-                                                    text: `Start an anonymous chat with ${chatId}`}
-                  senderMessages(payloadInitConversation);
-                  const payloadOption = { channel: target, text: remainingText }
-                  senderMessages(payloadOption);
+                  db.count(countRegisters => {
+                    const chatId = countRegisters + 1;
+                    const chatId =saveSession({ name: chatId,
+                                                sender_name: `@${sender_name}`,
+                                                sender: event.user,
+                                                receiver: target,
+                                                receiver_name: `@${receiver_name}`})
+                    const payloadInitConversation = { channel: target,
+                                                      text: `Start an anonymous chat with ${chatId}`}
+
+                    senderMessages(payloadInitConversation);
+                    const payloadOption = { channel: target, text: remainingText }
+                    senderMessages(payloadOption);
+                  })
+
 
                 });
           } else {
@@ -255,24 +261,16 @@ const senderMessages = (payloadOption, response, doc) => {
 }
 
 const saveSession = (data) => {
-  return new Promise((resolve, reject) => {
-    db.find({},(err, res) => {
-      if(res) {
-        const chatId = (res && res.length > 0) ? res.length + 1 : 1;
-        db.insert({ name: chatId,
-                   sender: data.sender,
-                   sender_name: data.sender_name,
-                   receiver: data.receiver,
-                   receiver_name: data.receiver_name,
-                   date: new Date() }, function (err, docs) {
-                     if(err) {
-                       console.log(err);
-                     }
-                   });
-         resolve(chatId);
-      }
-    });
-  })
+      db.insert({ name: data.name,
+                 sender: data.sender,
+                 sender_name: data.sender_name,
+                 receiver: data.receiver,
+                 receiver_name: data.receiver_name,
+                 date: new Date() }, function (err, docs) {
+                   if(err) {
+                     console.log(err);
+                   }
+                 });
 
 }
 
