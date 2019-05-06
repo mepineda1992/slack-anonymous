@@ -77,7 +77,7 @@ slackEvents.on('message', (event)=> {
                   }
                 }, (error, response2) => {
                   const receiver_name= JSON.parse(response2.body).user.name;
-                  db.count({}, function(countRegisters, errorCountRegisters) => {
+                  db.count({}, function(countRegisters, errorCountRegisters) {
                     const chatId = countRegisters ? countRegisters + 1 : 1;
                     saveSession({ name: chatId,
                                   sender_name: `@${sender_name}`,
