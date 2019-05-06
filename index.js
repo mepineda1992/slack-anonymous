@@ -259,23 +259,24 @@ const senderMessages = (payloadOption, response, doc) => {
 }
 
 const saveSession = (data) => {
-  return db.find({},(err, res) => {
-    if(res) {
-      const chatId = (res && res.length > 0) ? res.length + 1 : 1;
-      db.insert({ name: chatId,
-                 sender: data.sender,
-                 sender_name: data.sender_name,
-                 receiver: data.receiver,
-                 receiver_name: data.receiver_name,
-                 date: new Date() }, function (err, docs) {
-                   if(err) {
-                     console.log(err);
-                   }
-                 });
-      return chatId;
-    }
-
-  });
+  return new Promise((resolve, reject) => {
+    db.find({},(err, res) => {
+      if(res) {
+        const chatId = (res && res.length > 0) ? res.length + 1 : 1;
+        db.insert({ name: chatId,
+                   sender: data.sender,
+                   sender_name: data.sender_name,
+                   receiver: data.receiver,
+                   receiver_name: data.receiver_name,
+                   date: new Date() }, function (err, docs) {
+                     if(err) {
+                       console.log(err);
+                     }
+                   });
+         resolve(chatId);
+      }
+    });
+  })
 
 }
 
