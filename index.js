@@ -77,11 +77,14 @@ slackEvents.on('message', (event)=> {
                   }
                 }, (error, response2) => {
                   const receiver_name= JSON.parse(response2.body).user.name;
-
-                  const chatId = saveSession({sender_name: `@${sender_name}`,
+                  let chatId;
+                  saveSession({sender_name: `@${sender_name}`,
                                               sender: event.user,
                                               receiver: target,
-                                              receiver_name: `@${receiver_name}`});
+                                              receiver_name: `@${receiver_name}`})
+                                              .then(res => {
+                                                  chatId=res;
+                                              });
                   const payloadInitConversation = { channel: target,
                                                     text: `Start an anonymous chat with ${chatId}`}
                   senderMessages(payloadInitConversation);
