@@ -56,312 +56,183 @@ slackEvents.on('message', (event)=> {
     var remainingText = splitted.slice(1).join(' ');
     console.log(target);
 
-    async.waterfall([
-        function(callback) {
-          requestSlack(`${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`, 'GET')
+    senderMessageSlack(target, remainingText, event);
+
+  }
+});
+
+
+const senderMessageSlack = (target, remainingText, event) => {
+
+  async.waterfall([
+      function(callback) {
+        requestSlack(`${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`, 'GET')
+          .then(res => {
+            if(res && !res.error) {
+              const sender_name= JSON.parse(res.body).user.name;
+              console.log(sender_name)
+
+              callback(null, sender_name)
+            }
+
+            callback();
+          })
+          .catch(err => { console.log(`Error with request ${err}`)})
+      },
+      function(sender_name, callback) {
+        console.log(`Searching in the database ${sender_name}`);
+        if(sender_name) {
+          findRegisters(
+            db,
+            { sender_name: `@${sender_name}`,
+              sender: event.user,
+              receiver: target })
+          .then(doc => {
+            console.log(`Registers ${doc}`);
+            callback(null, doc, sender_name)
+
+          });
+        }
+
+      },
+      function(args, sender_name, callback) {
+        console.log(`Sending or saving sessionID ${args}, ${sender_name}`);
+
+        if(!args && sender_name) {
+          console.log("Information about the receiver")
+          requestSlack(`${SLACK_URL_INFO_USERS}?user=${target}&pretty=1`, 'GET')
             .then(res => {
-              if(res && !res.error) {
-                console.log(res.body)
-                const sender_name= JSON.parse(res.body).user.name;
+              if(res) {
+                console.log(res.body);
 
-                callback(null, sender_name)
+                const receiver_name= JSON.parse(res.body).user.name;
+                const display_receiver_name = JSON.parse(res.body).user.profile.display_name_normalized;
+                console.log(`Responde ${receiver_name}, ${display_receiver_name}`);
+
+                callback(null, receiver_name, display_receiver_name, sender_name);
               }
-
-              throw new Error(`The request wasn't works, ${res.error}`)
             })
-            .catch(err => {throw new Error(err.toString())})
-        },
-        function(sender_name, callback) {
-          if(sender_name) {
-            findRegisters(
-              db,
-              { sender_name: `@${sender_name}`,
-                sender: event.user,
-                receiver: target }).then(doc => {
-                  callback(null, doc, sender_name)
-                });
-          }
 
-          throw new Error(`There aren't args`)
-        },
-        function(args, sender_name, callback) {
-          if(args && !args.sender_name && !args.receiver_name) {
-            requestSlack(`${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`, 'GET')
-              .then(res => {
+        } else {
+          console.log('sending messages');
+          payloadOption = { channel: args.channel_id_receiver,
+                            text: `Someone with anonymous id ${args.name} said: ${remainingText}` }
+
+          requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
+          .then((r) =>
+            callback())
+          .catch(err => console.log('Error sending an anonymous message with already register'));
+
+        }
+
+      },
+      function(receiver_name, display_receiver_name, sender_name, callback) {
+        let chatId;
+        console.log("Saving registers to database");
+        if(receiver_name && sender_name) {
+          let channel_id_receiver;
+          let channel_id_sender;
+
+          findRegisters(db, {})
+            .then(newDocs => {
+                const idRegister = (newDocs && newDocs.length > 0) ?newDocs.length + 1: 1;
+                chatId = `${parseInt(Math.random() * (1000 - 1) + 1)}${idRegister}`
+                console.log(chatId);
+
+                console.log(`creating channel for ${target}`);
+                return requestSlack(`https://slack.com/api/conversations.create?user_ids=${target}`, 'POST', { is_private: true, name: `rec${chatId}`}, true)
+              })
+              .then((res) => {
+                console.log(res.body);
+
                 if(res) {
-                  const receiver_name= JSON.parse(response2.body).user.name;
-                  const display_receiver_name = JSON.parse(response2.body).user.profile.display_name_normalized;
-                  callback(null, receiver, display_receiver_name);
+                  channel_id_receiver=res.body.channel.id;
+                }
+
+                console.log(`Inviting  ${target} , ${process.env.BOT_ID} to ${channel_id_receiver}`);
+                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${target},${process.env.BOT_ID}`, channel: channel_id_receiver,force:true }, true)
+
+              })
+              .then((res) =>{
+                console.log('Securiting');
+
+                if(res && target != process.env.USER_ADMIN) {
+                  return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_receiver}, true)
                 }
               })
+              .then((res) => {
+                console.log(res.body);
 
-          } else {
-            console.log('sending messages');
-            const payloadOption = { channel: target,
-                                    text: `Someone with anonymous id ${args.name} said: ${remainingText}` }
-            senderMessages(payloadOption)
-            .then(() => callback())
-            .catch(err => console.log('Error sending an anonymous message with already register'));
+                console.log(`creating channel for ${event.user}`);
+                return requestSlack(`https://slack.com/api/conversations.create?user_ids=${event.user}`, 'POST', {is_private: true, name: `sen${chatId}` }, true)
 
-          }
-        },
-        function(receiver_name, display_receiver_name, sender_name, callback) {
-          let chatId;
-          if(receiver_name && display_receiver_name) {
-            findRegisters({})
+              })
+              .then((res) => {
+                console.log(res.body);
+                if(res) {
+                  channel_id_sender = res.body.channel.id;
+                }
+
+                console.log(`Inviting  ${target} , ${process.env.BOT_ID} to ${channel_id_receiver}`);
+                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${target},${process.env.BOT_ID}`, channel: channel_id_receiver,force:true }, true)
+
+              })
+              .then((res) =>{
+                console.log('Securiting');
+
+                if(res && event.user != process.env.USER_ADMIN) {
+                  return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_sender}, true)
+                }
+              })
               .then(res => {
-                const idRegister = (res && res.length > 0) ?res.length + 1: 1;
-                chatId = `${parseInt(Math.random() * (1000 - 1) + 1)}${idRegister}`
+
                 return saveSession( db,
                                     {name: chatId,
                                     sender_name: `@${sender_name}`,
                                     sender: event.user,
                                     receiver: target,
                                     receiver_name: `@${receiver_name}`,
-                                    display_receiver_name: `@${display_receiver_name}`})
+                                    display_receiver_name: `@${display_receiver_name}`,
+                                    channel_id_sender: channel_id_sender,
+                                    channel_id_receiver: channel_id_receiver })
               })
-              .then(newDocs => {
-                if(newDoc) {
-                  payloadInitConversation = { channel: target,
-                                              text: `Start an anonymous chat with ${chatId}`}
+              .then(res => {
+                payloadInitConversation = { channel: channel_id_receiver, text: `Someone start a chatId ${chatId}`,
+                                            as_user: true }
+                console.log(payloadInitConversation);
 
-                  return findRegisters(db.current_receivers, {receiver: target})
-                }
-              })
-              .then(newCurrentReceiver => {
-                if(newCurrentReceiver) {
-                  db.current_receivers.insert({ receiver: target, current_session: chatId });
-                  return senderMessages(payloadInitConversation)
-                }
+                return requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadInitConversation)
 
               })
-              .then(resSender => {
-                console.log(`Message was already sent ${resSender}`);
-                payloadOption = { channel: target,
-                                  text: `Someone with anonymous id ${chatId} said: ${remainingText}` }
-                return senderMessages(payloadOption);
+            .then(resSender => {
+              console.log(`Message was already sent ${resSender} ${target} ${chatId}`);
 
-              })
-              .then(() => {
-                console.log('Sender message');
-                callback();
-              })
-              .catch(err => console.log(`There is an error, god help me`));
+              payloadOption = { channel: channel_id_receiver,
+                                text: `Someone with anonymous id ${chatId} said: ${remainingText}`,
+                                as_user: true }
 
-          }
-        }
-    ], function (err, result) {
-        // result now equals 'done'
-        console.log('Done')
-        console.log(result)
-        if(err) {
-          console.log(err)
-        }
-    });
-  } else {
-    let payloadOption;
-    db.find({receiver: event.user }, function(err, docs) {
-      if(docs && docs.length === 1 && docs[0].sender_name) {
-        let remainingText = event.text;
-        if(event.text.split(" ")[0].substring(event.text.split(" ")[0].length - 4 , event.text.split(" ")[0].length) === '&gt;') {
-          var splitted = event.text.split(" ");
-          remainingText = splitted.slice(1).join(' ');
+              return requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
 
-        }
+            })
+            .then((r) => {
+              console.log('Sender message');
+              callback();
+            })
+            .catch(err => console.log(`There is an error, god help me ${err}`));
 
-        payloadOption = { channel: docs[0].sender_name, text: `${docs[0].display_receiver_name} says: ${remainingText}` }
-        senderMessages(payloadOption, '', docs);
-      } else {
-        var splitted = event.text.split(" ");
-        console.log(splitted);
-        if(docs && docs.length > 1 && splitted[0].substring(splitted[0].length - 4, splitted[0].length) === '&gt;') {
-          var splitted = event.text.split(" ");
-          if (splitted.length <= 1) {
-              return createError(getUsageHelp(command));
-          }
-          var session = splitted[0].substring(0, splitted[0].length - 4);
-          console.log(`Esto es la session ${session}`);
-          var remainingText = splitted.slice(1).join(' ');
-
-          const currentSender = docs.find(doc => doc.name === session);
-          if(currentSender) {
-            payloadOption = { channel: currentSender.sender_name, text: `${currentSender.receiver_name} says: ${remainingText}` }
-
-            db.current_receivers.find({receiver: currentSender.receiver}, function(errorReceiver, docsReceiver) {
-              db.current_receivers.update({_id: docsReceiver[0]._id},
-                                          {$set: {receiver: currentSender.receiver, current_session: session}},
-                                          {}, function (err, numReplaced) {
-
-                                            if(payloadOption) {
-                                              console.log(payloadOption);
-                                              senderMessages(payloadOption);
-                                            }
-              });
-            });
-          }
-        } else if (docs && docs.length > 1) {
-          db.current_receivers.find({receiver: event.user}, function(errorReceiver, receivers) {
-            console.log(docs);
-            console.log(receivers);
-            const currentSender = docs.find(doc => doc.name === receivers[0].current_session);
-            payloadOption = { channel: currentSender.sender, text: `${currentSender.display_receiver_name} says: ${event.text}` }
-            console.log(currentSender);
-            senderMessages(payloadOption);
-
-          });
         }
       }
-    })
-  }
-});
 
-// Handle errors (see `errorCodes` export)
-slackEvents.on('error', console.error);
-
-const createError = (errorMessage) => {error: errorMessage};
-
-const getUsageHelp = (commandName) => {
-    const createSample = (target) => { commandName + ' *' + target + '* I know what you did last summer' }
-
-    return 'Expected usage: \n' +
-        commandName + ' help -- Displays help message.\n' +
-        createSample('@user') + ' -- Sends to the specified user.\n' +
-        createSample('#channel') + ' -- Sends to the specified public channel.\n' +
-        createSample('group') + ' -- Sends to the specified private group.\n' +
-        createSample(':here') + ' -- Sends to the current group/channel/DM where you type this command.';
-
-}
-
-const getFullHelp = (commandName) =>
-        'Allows to send anonymous messages to users, channels and groups.\n' +
-        'The most convenient and safe way is to open up a conversation with slackbot in Slack and type the commands there, so that nobody detects that you are typing and you don\'t accidentally reveal yourself by typing an invalid command.\n' +
-        'Messages and authors are not stored, and the sources are available at <https://github.com/TargetProcess/slack-anonymous>.\n' +
-        '\n' +
-        getUsageHelp(commandName);
-
-const createResponsePayload = (requestBody) => {
-  if (!requestBody) {
-      return createError('Request is empty');
-  }
-
-  var text = requestBody.text;
-  var command = requestBody.command;
-
-  if (!text || text === 'help') {
-      return createError(getFullHelp(command));
-  }
-
-  var splitted = text.split(" ");
-  if (splitted.length <= 1) {
-      return createError(getUsageHelp(command));
-  }
-
-  var target = splitted[0];
-  var remainingText = splitted.slice(1).join(' ');
-  remainingText = `Someone said: ${remainingText}`;
-
-  if (target === ':here') {
-      return {
-          channel: requestBody.channel_id,
-          text: remainingText
-      };
-  }
-  console.log(requestBody.channel_id);
-
-  return {
-      channel: target,
-      text: remainingText
-  };
-
-}
-
-app.post('/', (req, response) => {
-  var payloadOption = createResponsePayload(req.body);
-  if (payloadOption.error) {
-      response.end(payloadOption.error);
-      return;
-  }
-  // contains
-  /*
-      { user_id: XXXXX,
-    }
-  */
-
-  console.log(`Someone with the user_id ${req.body.user_id} is trying to send to ${payloadOption.channel}`);
-
-
-  senderMessages(payloadOption, response);
-});
-
-app.get('/', (request, response) => {
-    response.write('HELLO THERE');
-    response.end();
-});
-
-const senderMessages = (payloadOption, response, doc) => {
-  let url;
-  if(payloadOption.channel[0] === '#') {
-    payloadOption.as_user=false;
-
-  } else {
-    payloadOption.as_user=true;
-
-  }
-  requestSlack(URL_SLACK_CHANNEL, 'POST', payloadOption)
-    .then(res => {
-      if(response && res && !res.error) {
-        response.end('Delivered! :cop:');
-        db.update(doc, {$set:{date: new Date()}},function(){
-
-        });
-
+  ], function (err, result) {
+      // result now equals 'done'
+      console.log('Done')
+      console.log(result)
+      if(err) {
+        console.log(err)
       }
-    });
+  });
+
 }
-
-
-
-
-http.createServer(app).listen(port, () => {
-  console.log(`server listening on port ${port}`);
-});
-
-var j = schedule.scheduleJob('* * * * *', function(fireDate){
-  console.log('This job was supposed to run at ' + fireDate + ', but actually ran at ' + new Date());
-  db.find({}, function(error, docs) {
-    docs.forEach(doc => {
-      console.log(`Analising:`);
-      console.log(doc);
-      console.log(new Date() - doc.date);
-      if((new Date() - doc.date) > TIMEOUT_CONVERSATION) {
-        const finishMessageSender = { channel: doc.sender_name,
-                                          text: `Finish an anonymous chat with ${doc.receiver_name}`}
-        senderMessages(finishMessageSender);
-        const finishMessageReceiver = { channel: doc.receiver_name,
-                                          text: `Finish an anonymous chat with ${doc.name}`}
-        senderMessages(finishMessageReceiver);
-
-        db.remove({ _id: doc._id }, {}, function (err, numRemoved) {
-          db.find({receiver: doc.receiver}, function(errorReceiver, docsNewReceiver) {
-            if(docsNewReceiver) {
-              db.current_receivers.find({receiver: docsNewReceiver[0].receiver}, function(errorReceiver, docsLastReceiver) {
-                db.current_receivers.update({_id: docsLastReceiver[0]._id},
-                                            {$set:{receiver: docsNewReceiver[0].receiver, current_session: docsNewReceiver[0].name}},
-                                            {}, function (err, numReplaced) {
-                    const payloadOptionNotification = { channel: docsNewReceiver[0].receiver,
-                                                      text: `You are switched to ${docsNewReceiver[0].name}`}
-                    senderMessages(payloadOptionNotification);
-                });
-              });
-
-            }
-          });
-        });
-      }
-    })
-  })
-});
-
 const findRegisters = (currentDb, query) =>
    new Promise((resolve) => {
     currentDb.find(query)
@@ -381,11 +252,13 @@ const saveSession = (currentDb, data) =>
       receiver: data.receiver,
       receiver_name: data.receiver_name,
       display_receiver_name: data.display_receiver_name,
+      channel_id_sender: data.channel_id_sender,
+      channel_id_receiver: data.channel_id_receiver,
       date: new Date() }, function (err, docs) {
         resolve(docs);
 
       })
-  });
+})
 
 const removeRegisters = (currentDb, id) =>
   new Promise((resolve) => {
@@ -406,43 +279,20 @@ const updateRegisters = (currentDb, doc, newDoc) =>
       })
   });
 
-const requestSlack = (url, method, payload) =>
-  new Promise((resolve) => request({
+const requestSlack = (url, method, payload, pointer) => {
+  console.log(`Este es el pointer the pointers ${pointer}`);
+  let token = pointer ? process.env.TOKEN_USER : process.env.TOKEN_BOT;
+  console.log(`TOKEN: ${token}`);
+
+  return new Promise((resolve) => request({
     uri: url,
     method: method,
     json: payload,
     headers: {
-      'Authorization': `Bearer ${process.env.TOKEN}`
+      'Authorization': `Bearer ${token}`
     }
-  }, (err, res) => resolve(res && res.body)))
+  }, (err, res) => resolve(res)))}
 
-
-async.waterfall([
-    function(callback) {
-      requestSlack(`${SLACK_URL_INFO_USERS}?user=@mepineda1992&pretty=1`, 'GET')
-        .then(res => {
-          if(!res.error) {
-            callback(null, res)
-          }
-
-          throw new Error(`The request wasn't works, ${res.error}`)
-        })
-        .catch(err => {throw new Error(err.toString())})
-    },
-    function(arg1, callback) {
-      if(!arg1.error) {
-        saveSession(db, {sender: arg1.user})
-          .then((res)=> callback(null, res))
-          .catch(err => console.log(err));
-      }
-
-      throw new Error(`There aren't args`)
-    }
-], function (err, result) {
-    // result now equals 'done'
-    console.log('Done')
-    console.log(result)
-    if(err) {
-      console.log(err)
-    }
+http.createServer(app).listen(port, () => {
+  console.log(`server listening on port ${port}`);
 });
