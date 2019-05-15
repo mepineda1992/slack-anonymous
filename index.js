@@ -6,6 +6,9 @@ const app = express();
 const bodyParser = require('body-parser');
 const request = require('request');
 const http = require('http');
+const async = require('async');
+const waterfall = require('async/waterfall');
+
 
 // Initialize using signing secret from environment variables to receive events
 const { createEventAdapter } = require('@slack/events-api');
@@ -38,6 +41,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 slackEvents.on('message', (event)=> {
   console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
   console.log(event.text.substring(0,2));
+
   if(event && event.user && event.text.substring(0,2)=== '<@') {
     console.log('Sending messages');
     var splitted = event.text.split(" ");
@@ -289,20 +293,7 @@ const senderMessages = (payloadOption, response, doc) => {
   });
 }
 
-const saveSession = (data) => {
-      db.insert({ name: data.name,
-                 sender: data.sender,
-                 sender_name: data.sender_name,
-                 receiver: data.receiver,
-                 receiver_name: data.receiver_name,
-                 display_receiver_name: data.display_receiver_name,
-                 date: new Date() }, function (err, docs) {
-                   if(err) {
-                     console.log(err);
-                   }
-                 });
 
-}
 
 
 http.createServer(app).listen(port, () => {
@@ -344,3 +335,48 @@ var j = schedule.scheduleJob('* * * * *', function(fireDate){
     })
   })
 });
+
+const findRegisters = (currentDb, query) =>
+   new Promise((resolve) => {
+    currentDb.find(query)
+      .exec((err, docs) => {
+        resolve(
+          docs && docs.length > 1 ? docs : docs[0]
+        );
+      });
+  });
+
+const saveSession = (currentDb, data) =>
+  new Promise((resolve) => {
+    currentDb.insert({
+      name: data.name,
+      sender: data.sender,
+      sender_name: data.sender_name,
+      receiver: data.receiver,
+      receiver_name: data.receiver_name,
+      display_receiver_name: data.display_receiver_name,
+      date: new Date() }, function (err, docs) {
+        resolve(docs);
+
+      })
+  });
+
+const removeRegisters = (currentDb, id) =>
+  new Promise((resolve) => {
+    currentDb.remove({
+      _id: id
+    }, {}, function(err, docs) {
+      resolve(docs);
+    })
+  });
+
+const updateRegisters = (currentDb, doc, newDoc) =>
+  new Promise((resolve) => {
+    currentDb.update(
+      { _id: doc._id },
+      { $set: {newDoc}},
+      {}, function(err, updated) {
+        resolve(updated);
+      }
+    )
+  });
