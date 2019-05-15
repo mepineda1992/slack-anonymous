@@ -41,6 +41,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 slackEvents.on('message', (event)=> {
   console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
   console.log(event.text.substring(0,2));
+  let payloadInitConversation, payloadOption;
 
   if(event && event.user && event.text.substring(0,2)=== '<@') {
     console.log('Sending messages');
@@ -54,71 +55,109 @@ slackEvents.on('message', (event)=> {
     var target = splitted[0].substring(2, splitted[0].length - 1);
     var remainingText = splitted.slice(1).join(' ');
     console.log(target);
-    request({
-      uri: `${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`,
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN}`
-      }
-    }, (error, res) => {
-      if(res) {
-        console.log(res.body)
-        const sender_name= JSON.parse(res.body).user.name;
 
-        db.find({ sender_name: `@${sender_name}`,
-                 sender: event.user,
-                 receiver: target }, function(err, docs) {
-          if(docs && docs.length <= 0) {
-              console.log('There is a session with the person')
-              request({
-                  uri: `${SLACK_URL_INFO_USERS}?user=${target}&pretty=1`,
-                  method: 'GET',
-                  headers: {
-                    'Authorization': `Bearer ${process.env.TOKEN}`
-                  }
-                }, (error, response2) => {
+    async.waterfall([
+        function(callback) {
+          requestSlack(`${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`, 'GET')
+            .then(res => {
+              if(res && !res.error) {
+                console.log(res.body)
+                const sender_name= JSON.parse(res.body).user.name;
+
+                callback(null, sender_name)
+              }
+
+              throw new Error(`The request wasn't works, ${res.error}`)
+            })
+            .catch(err => {throw new Error(err.toString())})
+        },
+        function(sender_name, callback) {
+          if(sender_name) {
+            findRegisters(
+              db,
+              { sender_name: `@${sender_name}`,
+                sender: event.user,
+                receiver: target }).then(doc => {
+                  callback(null, doc, sender_name)
+                });
+          }
+
+          throw new Error(`There aren't args`)
+        },
+        function(args, sender_name, callback) {
+          if(args && !args.sender_name && !args.receiver_name) {
+            requestSlack(`${SLACK_URL_INFO_USERS}?user=${event.user}&pretty=1`, 'GET')
+              .then(res => {
+                if(res) {
                   const receiver_name= JSON.parse(response2.body).user.name;
                   const display_receiver_name = JSON.parse(response2.body).user.profile.display_name_normalized;
-                  db.count({}, function(countRegisters, errorCountRegisters) {
-                    const idRegister = countRegisters ? countRegisters + 1 : 1;
-                    const chatId = `${parseInt(Math.random() * (1000 - 1) + 1)}${idRegister}`
+                  callback(null, receiver, display_receiver_name);
+                }
+              })
 
-                    saveSession({ name: chatId,
-                                  sender_name: `@${sender_name}`,
-                                  sender: event.user,
-                                  receiver: target,
-                                  receiver_name: `@${receiver_name}`,
-                                  display_receiver_name: `@${display_receiver_name}`})
-                    const payloadInitConversation = { channel: target,
-                                                      text: `Start an anonymous chat with ${chatId}`}
-
-                    db.current_receivers.find({receiver: target}, function(errorReceiver, docsLastReceiver) {
-                      if(!docsLastReceiver || !docsLastReceiver[0]) {
-                        db.current_receivers.insert({ receiver: target, current_session: chatId });
-
-                      }
-                    });
-
-                    senderMessages(payloadInitConversation);
-                    const payloadOption = { channel: target, text: `Someone with anonymous id ${chatId} said: ${remainingText}` }
-                    senderMessages(payloadOption);
-                  });
-
-
-                });
           } else {
             console.log('sending messages');
             const payloadOption = { channel: target,
-                                    text: `Someone with anonymous id ${docs[0].name} said: ${remainingText}` }
-            senderMessages(payloadOption);
+                                    text: `Someone with anonymous id ${args.name} said: ${remainingText}` }
+            senderMessages(payloadOption)
+            .then(() => callback())
+            .catch(err => console.log('Error sending an anonymous message with already register'));
+
           }
-        });
+        },
+        function(receiver_name, display_receiver_name, sender_name, callback) {
+          let chatId;
+          if(receiver_name && display_receiver_name) {
+            findRegisters({})
+              .then(res => {
+                const idRegister = (res && res.length > 0) ?res.length + 1: 1;
+                chatId = `${parseInt(Math.random() * (1000 - 1) + 1)}${idRegister}`
+                return saveSession( db,
+                                    {name: chatId,
+                                    sender_name: `@${sender_name}`,
+                                    sender: event.user,
+                                    receiver: target,
+                                    receiver_name: `@${receiver_name}`,
+                                    display_receiver_name: `@${display_receiver_name}`})
+              })
+              .then(newDocs => {
+                if(newDoc) {
+                  payloadInitConversation = { channel: target,
+                                              text: `Start an anonymous chat with ${chatId}`}
 
+                  return findRegisters(db.current_receivers, {receiver: target})
+                }
+              })
+              .then(newCurrentReceiver => {
+                if(newCurrentReceiver) {
+                  db.current_receivers.insert({ receiver: target, current_session: chatId });
+                  return senderMessages(payloadInitConversation)
+                }
 
-      }
+              })
+              .then(resSender => {
+                console.log(`Message was already sent ${resSender}`);
+                payloadOption = { channel: target,
+                                  text: `Someone with anonymous id ${chatId} said: ${remainingText}` }
+                return senderMessages(payloadOption);
 
-    })
+              })
+              .then(() => {
+                console.log('Sender message');
+                callback();
+              })
+              .catch(err => console.log(`There is an error, god help me`));
 
+          }
+        }
+    ], function (err, result) {
+        // result now equals 'done'
+        console.log('Done')
+        console.log(result)
+        if(err) {
+          console.log(err)
+        }
+    });
   } else {
     let payloadOption;
     db.find({receiver: event.user }, function(err, docs) {
@@ -268,29 +307,16 @@ const senderMessages = (payloadOption, response, doc) => {
     payloadOption.as_user=true;
 
   }
+  requestSlack(URL_SLACK_CHANNEL, 'POST', payloadOption)
+    .then(res => {
+      if(response && res && !res.error) {
+        response.end('Delivered! :cop:');
+        db.update(doc, {$set:{date: new Date()}},function(){
 
-  request({
-      uri: URL_SLACK_CHANNEL,
-      method: 'POST',
-      json: payloadOption,
-      headers: {
-        'Authorization': `Bearer ${process.env.TOKEN}`
-      }
-  },  (error, res) => {
-      if(error) {
-        console.log(error)
-        if (response) {
-          response.end(`Unable to post your anonymous message ${JSON.stringify(error)}`);
-        }
-      } else {
-        if (response) {
-          response.end('Delivered! :cop:');
-          db.update(doc, {$set:{date: new Date()}},function(){
+        });
 
-          });
-        }
       }
-  });
+    });
 }
 
 
@@ -377,6 +403,46 @@ const updateRegisters = (currentDb, doc, newDoc) =>
       { $set: {newDoc}},
       {}, function(err, updated) {
         resolve(updated);
-      }
-    )
+      })
   });
+
+const requestSlack = (url, method, payload) =>
+  new Promise((resolve) => request({
+    uri: url,
+    method: method,
+    json: payload,
+    headers: {
+      'Authorization': `Bearer ${process.env.TOKEN}`
+    }
+  }, (err, res) => resolve(res && res.body)))
+
+
+async.waterfall([
+    function(callback) {
+      requestSlack(`${SLACK_URL_INFO_USERS}?user=@mepineda1992&pretty=1`, 'GET')
+        .then(res => {
+          if(!res.error) {
+            callback(null, res)
+          }
+
+          throw new Error(`The request wasn't works, ${res.error}`)
+        })
+        .catch(err => {throw new Error(err.toString())})
+    },
+    function(arg1, callback) {
+      if(!arg1.error) {
+        saveSession(db, {sender: arg1.user})
+          .then((res)=> callback(null, res))
+          .catch(err => console.log(err));
+      }
+
+      throw new Error(`There aren't args`)
+    }
+], function (err, result) {
+    // result now equals 'done'
+    console.log('Done')
+    console.log(result)
+    if(err) {
+      console.log(err)
+    }
+});
