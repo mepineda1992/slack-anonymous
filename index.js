@@ -84,7 +84,7 @@ slackEvents.on('message', (event)=> {
 
           if(res.channel_id_receiver == event.channel && event.user == res.receiver)  {
             const payloadOption = { channel: res.channel_id_receiver,
-                              text: `Someone with chatId ${args.name} says: ${event.text}`,
+                              text: `Someone with chatId ${res.name} says: ${event.text}`,
                               as_user: true }
 
             requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
