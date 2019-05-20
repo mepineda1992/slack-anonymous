@@ -159,6 +159,7 @@ const senderMessageSlack = (target, remainingText, event) => {
               })
               .then((res) =>{
                 console.log('Securiting');
+                console.log(res);
 
                 if(res && target != process.env.USER_ADMIN) {
                   return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_receiver}, true)
@@ -172,7 +173,7 @@ const senderMessageSlack = (target, remainingText, event) => {
 
               })
               .then((res) => {
-                console.log(res.body);
+                console.log(res);
                 if(res) {
                   channel_id_sender = res.body.channel.id;
                 }
