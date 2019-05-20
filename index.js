@@ -18,8 +18,9 @@ const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
 var schedule = require('node-schedule');
 
 const port = process.env.PORT || 5000;
-const URL_SLACK_CHANNEL = process.env.SLACK_URL_CHANNELS || 'localhost';
-const SLACK_URL_USERS = process.env.SLACK_URL_USERS || 'localhost';
+const USER_ADMIN = process.env.USER_ADMIN || '';
+const BOT_ID = process.env.BOT_ID || '';
+
 const SLACK_URL_INFO_USERS = process.env.SLACK_URL_INFO_USERS || 'localhost';
 const TIMEOUT_CONVERSATION = process.env.TIMEOUT_CONVERSATION || 1000;
 // Type 2: Persistent datastore with manual loading
@@ -214,15 +215,15 @@ const senderMessageSlack = (target, remainingText, event) => {
                   channel_id_receiver=res.body.channel.id;
                 }
 
-                console.log(`Inviting  ${target} , ${process.env.BOT_ID} to ${channel_id_receiver}`);
-                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${target},${process.env.BOT_ID}`, channel: channel_id_receiver,force:true }, true)
+                console.log(`Inviting  ${target} , ${BOT_ID} to ${channel_id_receiver}`);
+                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${target},${BOT_ID}`, channel: channel_id_receiver,force:true }, true)
 
               })
               .then((res) =>{
                 console.log('Securiting');
                 console.log(res && res.body);
 
-                if(res && target != process.env.USER_ADMIN) {
+                if(res && target != USER_ADMIN) {
                   return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_receiver}, true)
                 }
               })
@@ -239,14 +240,14 @@ const senderMessageSlack = (target, remainingText, event) => {
                   channel_id_sender = res.body.channel.id;
                 }
 
-                console.log(`Inviting  ${target} , ${process.env.BOT_ID} to ${channel_id_receiver}`);
-                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${event.user},${process.env.BOT_ID}`, channel: channel_id_sender,force:true }, true)
+                console.log(`Inviting  ${target} , ${BOT_ID} to ${channel_id_receiver}`);
+                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${event.user},${BOT_ID}`, channel: channel_id_sender,force:true }, true)
 
               })
               .then((res) =>{
                 console.log('Securiting');
 
-                if(res && event.user != process.env.USER_ADMIN) {
+                if(res && event.user != USER_ADMIN) {
                   return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_sender}, true)
                 }
               })

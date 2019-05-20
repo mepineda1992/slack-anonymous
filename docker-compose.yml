@@ -5,13 +5,12 @@ services:
       context: './'
     image: 'ioet/anonymous-slack'
     environment:
-      - PORT=5000
-      - SLACK_SIGNING_SECRET='698ab4694f1fa43fdb8479ef2bdc9e8c'
-      - SLACK_URL_CHANNELS='https://slack.com/api/chat.postMessage'
-      - SLACK_URL_USERS='https://hooks.slack.com/services/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'
-      - SLACK_URL_INFO_USERS='https://slack.com/api/users.info'
-      - TOKEN='xoxb-197273753073-621913693616-D5adhVvu0LHNnIqSb2xB6Rxs'
-      - TIMEOUT_CONVERSATION=1000
+      - SLACK_SIGNING_SECRET=
+      - TOKEN_BOT=
+      - TOKEN_USER=
+      - TIMEOUT_CONVERSATION=600000
+      - BOT_ID=
+      - USER_ADMIN=
     container_name: anonymous-slack
     ports:
       - 5000:5000
