@@ -63,8 +63,18 @@ slackEvents.on('message', (event)=> {
       senderMessageSlack(target, remainingText, event);
 
     } else {
-      isReceiverSender(event.user, event.channel).then(res=> console.log(res));
-      const res = receiverMessageSlack(event.user, event.channel, event.text);
+      isReceiverSender(event.user, event.channel).then(res=> {
+        console.log(res)
+        if(res) {
+          if(res.channel_id_sender == event.channel && event.user == res.sender) {
+            // senderMessages
+          }
+          if(res.channel_id_receiver == event.channel && event.user == res.receiver)  {
+            receiverMessageSlack(res);
+          }
+        }
+
+      });
 
     }
   }
@@ -80,6 +90,7 @@ const isReceiverSender = (user, channel) => {
       if(res) {
         resolve(res)
       }
+
       return findRegisters(db, { sender: user,
                                  channel_id_sender: channel})
 
@@ -92,23 +103,9 @@ const isReceiverSender = (user, channel) => {
   })
 }
 
-const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
+const receiverMessageSlack = (args, remainingText) => {
 
   async.waterfall([
-    function(callback) {
-      findRegisters(
-        db,
-        { receiver: receiver,
-          channel_id_receiver: channel_id_receiver,
-        })
-      .then(docs => {
-        if(docs) {
-          console.log(`Registers ${docs}`);
-          callback(null, docs)
-        }
-
-      });
-    },
     function(args, callback) {
       if(args) {
         payloadOption = { channel: args.channel_id_sender,
@@ -135,6 +132,34 @@ const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
   })
 }
 
+const senderMessageRepSlack = (args, remainingText) => {
+
+  async.waterfall([
+    function(args, callback) {
+      if(args) {
+        payloadOption = { channel: args.channel_id_receiver,
+                          text: `Someone with chatId `${args.name}` says: ${remainingText}`,
+                          as_user: true }
+
+        requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
+        .then(res => {
+          if(res) {
+            console.log(res && res.body);
+            callback()
+          }
+        })
+      }
+    }
+  ], function (err, result) {
+      // result now equals 'done'
+      console.log('Done')
+      console.log(result)
+      return 'done';
+      if(err) {
+        console.log(err)
+      }
+  })
+}
 const senderMessageSlack = (target, remainingText, event) => {
 
   async.waterfall([
