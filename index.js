@@ -67,10 +67,35 @@ slackEvents.on('message', (event)=> {
         console.log(res)
         if(res) {
           if(res.channel_id_sender == event.channel && event.user == res.sender) {
-            senderMessageRepSlack(res, remainingText)
+
+            const payloadOption = { channel: res.channel_id_receiver,
+                              text: `Someone with chatId ${res.name} says: ${remainingText}`,
+                              as_user: true }
+
+            requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
+            .then(res => {
+              if(res) {
+                console.log(res && res.body);
+                callback()
+              }
+            })
+            .catch(err => { console.log(`Error with request ${err}`)})
+
           }
+
           if(res.channel_id_receiver == event.channel && event.user == res.receiver)  {
-            receiverMessageSlack(res, remainingText);
+            const payloadOption = { channel: args.channel_id_receiver,
+                              text: `Someone with chatId ${args.name} says: ${remainingText}`,
+                              as_user: true }
+
+            requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
+            .then(res => {
+              if(res) {
+                console.log(res && res.body);
+                callback()
+              }
+            })
+            .catch(err => { console.log(`Error with request ${err}`)})
           }
         }
 
@@ -100,69 +125,6 @@ const isReceiverSender = (user, channel) => {
         resolve(res)
       }
     })
-  })
-}
-
-const receiverMessageSlack = (args, remainingText) => {
-
-  async.waterfall([
-    function(args, callback) {
-      if(args) {
-
-        const payloadOption = { channel: args.channel_id_sender,
-                          text: `${args.display_receiver_name} says: ${remainingText}`,
-                          as_user: true }
-
-        requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
-        .then(res => {
-          if(res) {
-            console.log(res && res.body);
-            callback()
-          }
-        })
-        .catch(err => { console.log(`Error with request ${err}`)})
-
-      }
-    }
-  ], function (err, result) {
-      // result now equals 'done'
-      console.log('Done')
-      console.log(result)
-      return 'done';
-      if(err) {
-        console.log(err)
-      }
-  })
-}
-
-const senderMessageRepSlack = (args, remainingText) => {
-
-  async.waterfall([
-    function(args, callback) {
-      if(args) {
-        const payloadOption = { channel: args.channel_id_receiver,
-                          text: `Someone with chatId ${args.name} says: ${remainingText}`,
-                          as_user: true }
-
-        requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
-        .then(res => {
-          if(res) {
-            console.log(res && res.body);
-            callback()
-          }
-        })
-        .catch(err => { console.log(`Error with request ${err}`)})
-
-      }
-    }
-  ], function (err, result) {
-      // result now equals 'done'
-      console.log('Done')
-      console.log(result)
-      return 'done';
-      if(err) {
-        console.log(err)
-      }
   })
 }
 
