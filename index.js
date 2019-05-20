@@ -138,7 +138,7 @@ const senderMessageRepSlack = (args, remainingText) => {
     function(args, callback) {
       if(args) {
         payloadOption = { channel: args.channel_id_receiver,
-                          text: `Someone with chatId `${args.name}` says: ${remainingText}`,
+                          text: `Someone with chatId ${args.name} says: ${remainingText}`,
                           as_user: true }
 
         requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
