@@ -88,9 +88,8 @@ const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
 
       });
     },
-
     function(args, callback) {
-      if(docs) {
+      if(args) {
         payloadOption = { channel: args.channel_id_sender,
                           text: `${args.display_receiver_name} says: ${remainingText}`,
                           as_user: true }
