@@ -62,11 +62,51 @@ slackEvents.on('message', (event)=> {
 
       senderMessageSlack(target, remainingText, event);
 
+    } else {
+      const res = receiverMessageSlack(event.user, channel, event.text);
+      console.log(`esta es l respuesta ${res}`);
     }
   }
 
 });
 
+
+const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
+
+  async.waterfall([
+    function(callback) {
+      findRegisters(
+        db,
+        { receiver: `@${receiver}`,
+          channel_id_receiver: channel_id_receiver,
+        })
+      .then(docs => {
+        console.log(`Registers ${docs}`);
+        callback(null, docs)
+
+      });
+    },
+
+    function(args, callback) {
+      if(docs) {
+        payloadOption = { channel: args.channel_id_sender,
+                          text: `${args.display_receiver_name} says: ${remainingText}`,
+                          as_user: true }
+
+        requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
+        .then(res => callback())
+      }
+    }
+  ], function (err, result) {
+      // result now equals 'done'
+      console.log('Done')
+      console.log(result)
+      return 'done';
+      if(err) {
+        console.log(err)
+      }
+  })
+}
 
 const senderMessageSlack = (target, remainingText, event) => {
 
@@ -122,7 +162,8 @@ const senderMessageSlack = (target, remainingText, event) => {
         } else {
           console.log('sending messages');
           payloadOption = { channel: args.channel_id_receiver,
-                            text: `Someone with anonymous id ${args.name} said: ${remainingText}` }
+                            text: `Someone with anonymous id ${args.name} said: ${remainingText}`,
+                            as_user: true }
 
           requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
           .then((r) =>
