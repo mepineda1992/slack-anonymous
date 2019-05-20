@@ -95,7 +95,12 @@ const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
                           as_user: true }
 
         requestSlack('https://slack.com/api/chat.postMessage', 'POST', payloadOption)
-        .then(res => callback())
+        .then(res => {
+          if(res) {
+            console.log(res && res.body);
+            callback()
+          }
+        })
       }
     }
   ], function (err, result) {
