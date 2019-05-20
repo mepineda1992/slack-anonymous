@@ -149,7 +149,7 @@ const senderMessageSlack = (target, remainingText, event) => {
                 return requestSlack(`https://slack.com/api/conversations.create?user_ids=${target}`, 'POST', { is_private: true, name: `rec${chatId}`}, true)
               })
               .then((res) => {
-                console.log(res.body);
+                console.log(res && res.body);
 
                 if(res) {
                   channel_id_receiver=res.body.channel.id;
@@ -161,21 +161,21 @@ const senderMessageSlack = (target, remainingText, event) => {
               })
               .then((res) =>{
                 console.log('Securiting');
-                console.log(res);
+                console.log(res && res.body);
 
                 if(res && target != process.env.USER_ADMIN) {
                   return requestSlack('https://slack.com/api/conversations.leave','POST', {channel: channel_id_receiver}, true)
                 }
               })
               .then((res) => {
-                console.log(res);
+                console.log(res && res.body);
 
                 console.log(`creating channel for ${event.user}`);
                 return requestSlack(`https://slack.com/api/conversations.create?user_ids=${event.user}`, 'POST', {is_private: true, name: `sen${chatId}` }, true)
 
               })
               .then((res) => {
-                console.log(res);
+                console.log(res && res.body);
                 if(res) {
                   channel_id_sender = res.body.channel.id;
                 }
@@ -192,7 +192,7 @@ const senderMessageSlack = (target, remainingText, event) => {
                 }
               })
               .then(res => {
-                console.log(res.body);
+                console.log(res && res.body);
                 return saveSession( db,
                                     {name: chatId,
                                     sender_name: `@${sender_name}`,
