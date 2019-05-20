@@ -42,8 +42,10 @@ slackEvents.on('message', (event)=> {
   console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
   console.log(event.text.substring(0,2));
   let payloadInitConversation, payloadOption;
-  if(event.text.indexOf('has joined the group') >= 0) {
+  if(event.text.indexOf('has joined the group') >= 0 ||
+     event.text.indexOf('has left the group')) {
     console.log('It is not a valid message');
+
   } else {
     if(event && event.user && event.text.substring(0,2)=== '<@') {
       console.log('Sending messages');
