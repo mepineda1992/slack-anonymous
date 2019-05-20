@@ -77,12 +77,14 @@ const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
     function(callback) {
       findRegisters(
         db,
-        { receiver: `@${receiver}`,
+        { receiver: receiver,
           channel_id_receiver: channel_id_receiver,
         })
       .then(docs => {
-        console.log(`Registers ${docs}`);
-        callback(null, docs)
+        if(docs) {
+          console.log(`Registers ${docs}`);
+          callback(null, docs)
+        }
 
       });
     },
