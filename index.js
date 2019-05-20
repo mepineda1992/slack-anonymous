@@ -76,7 +76,6 @@ slackEvents.on('message', (event)=> {
             .then(res => {
               if(res) {
                 console.log(res && res.body);
-                callback()
               }
             })
             .catch(err => { console.log(`Error with request ${err}`)})
@@ -92,7 +91,6 @@ slackEvents.on('message', (event)=> {
             .then(res => {
               if(res) {
                 console.log(res && res.body);
-                callback()
               }
             })
             .catch(err => { console.log(`Error with request ${err}`)})
