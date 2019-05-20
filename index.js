@@ -43,7 +43,7 @@ slackEvents.on('message', (event)=> {
   console.log(event.text.substring(0,2));
   let payloadInitConversation, payloadOption;
   if(event.text.indexOf('has joined the group') >= 0 ||
-     event.text.indexOf('has left the group')) {
+     event.text.indexOf('has left the group') >= 0) {
     console.log('It is not a valid message');
 
   } else {
