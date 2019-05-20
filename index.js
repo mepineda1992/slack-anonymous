@@ -63,7 +63,7 @@ slackEvents.on('message', (event)=> {
       senderMessageSlack(target, remainingText, event);
 
     } else {
-      const res = receiverMessageSlack(event.user, channel, event.text);
+      const res = receiverMessageSlack(event.user, event.channel, event.text);
       console.log(`esta es l respuesta ${res}`);
     }
   }
