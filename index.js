@@ -228,7 +228,7 @@ const senderMessageSlack = (target, remainingText, event) => {
                 }
 
                 console.log(`Inviting  ${target} , ${process.env.BOT_ID} to ${channel_id_receiver}`);
-                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${target},${process.env.BOT_ID}`, channel: channel_id_receiver,force:true }, true)
+                return requestSlack(`https://slack.com/api/conversations.invite`, 'POST', {users:`${event.user},${process.env.BOT_ID}`, channel: channel_id_sender,force:true }, true)
 
               })
               .then((res) =>{
