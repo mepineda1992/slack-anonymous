@@ -165,7 +165,7 @@ const senderMessageSlack = (target, remainingText, event) => {
                 }
               })
               .then((res) => {
-                console.log(res.body);
+                console.log(res);
 
                 console.log(`creating channel for ${event.user}`);
                 return requestSlack(`https://slack.com/api/conversations.create?user_ids=${event.user}`, 'POST', {is_private: true, name: `sen${chatId}` }, true)
