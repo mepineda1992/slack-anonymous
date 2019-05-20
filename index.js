@@ -42,23 +42,27 @@ slackEvents.on('message', (event)=> {
   console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
   console.log(event.text.substring(0,2));
   let payloadInitConversation, payloadOption;
+  if(even.text.indexOf('has joined the group') >= 0) {
+    console.log('It is not a valid message');
+  } else {
+    if(event && event.user && event.text.substring(0,2)=== '<@') {
+      console.log('Sending messages');
+      var splitted = event.text.split(" ");
+      console.log(splitted);
 
-  if(event && event.user && event.text.substring(0,2)=== '<@') {
-    console.log('Sending messages');
-    var splitted = event.text.split(" ");
-    console.log(splitted);
+      if (splitted.length <= 1) {
+          return createError(getUsageHelp(command));
+      }
 
-    if (splitted.length <= 1) {
-        return createError(getUsageHelp(command));
+      var target = splitted[0].substring(2, splitted[0].length - 1);
+      var remainingText = splitted.slice(1).join(' ');
+      console.log(target);
+
+      senderMessageSlack(target, remainingText, event);
+
     }
-
-    var target = splitted[0].substring(2, splitted[0].length - 1);
-    var remainingText = splitted.slice(1).join(' ');
-    console.log(target);
-
-    senderMessageSlack(target, remainingText, event);
-
   }
+
 });
 
 
@@ -185,7 +189,7 @@ const senderMessageSlack = (target, remainingText, event) => {
                 }
               })
               .then(res => {
-
+                console.log(res.body);
                 return saveSession( db,
                                     {name: chatId,
                                     sender_name: `@${sender_name}`,
