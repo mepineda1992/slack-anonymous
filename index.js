@@ -108,7 +108,8 @@ const receiverMessageSlack = (args, remainingText) => {
   async.waterfall([
     function(args, callback) {
       if(args) {
-        payloadOption = { channel: args.channel_id_sender,
+
+        const payloadOption = { channel: args.channel_id_sender,
                           text: `${args.display_receiver_name} says: ${remainingText}`,
                           as_user: true }
 
@@ -139,7 +140,7 @@ const senderMessageRepSlack = (args, remainingText) => {
   async.waterfall([
     function(args, callback) {
       if(args) {
-        payloadOption = { channel: args.channel_id_receiver,
+        const payloadOption = { channel: args.channel_id_receiver,
                           text: `Someone with chatId ${args.name} says: ${remainingText}`,
                           as_user: true }
 
