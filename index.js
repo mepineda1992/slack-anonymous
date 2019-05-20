@@ -63,13 +63,34 @@ slackEvents.on('message', (event)=> {
       senderMessageSlack(target, remainingText, event);
 
     } else {
+      isReceiverSender(event.user, event.channel).then(res=> console.log(res));
       const res = receiverMessageSlack(event.user, event.channel, event.text);
-      console.log(`esta es l respuesta ${res}`);
+
     }
   }
 
 });
 
+const isReceiverSender = (user, channel) => {
+  return new Promise(resolve => {
+    findRegisters(db,
+                  { receiver: user,
+                    channel_id_receiver: channel})
+    .then(res => {
+      if(res) {
+        resolve(res)
+      }
+      return findRegisters(db, { sender: user,
+                                 channel_id_sender: channel})
+
+    })
+    .then(res => {
+      if(res) {
+        resolve(res)
+      }
+    })
+  })
+}
 
 const receiverMessageSlack = (receiver, channel_id_receiver, remainingText) => {
 
