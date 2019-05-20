@@ -67,10 +67,10 @@ slackEvents.on('message', (event)=> {
         console.log(res)
         if(res) {
           if(res.channel_id_sender == event.channel && event.user == res.sender) {
-            // senderMessages
+            senderMessageRepSlack(res, remainingText)
           }
           if(res.channel_id_receiver == event.channel && event.user == res.receiver)  {
-            receiverMessageSlack(res);
+            receiverMessageSlack(res, remainingText);
           }
         }
 
