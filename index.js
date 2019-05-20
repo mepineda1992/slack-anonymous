@@ -119,6 +119,8 @@ const receiverMessageSlack = (args, remainingText) => {
             callback()
           }
         })
+        .catch(err => { console.log(`Error with request ${err}`)})
+
       }
     }
   ], function (err, result) {
@@ -148,6 +150,8 @@ const senderMessageRepSlack = (args, remainingText) => {
             callback()
           }
         })
+        .catch(err => { console.log(`Error with request ${err}`)})
+
       }
     }
   ], function (err, result) {
@@ -160,6 +164,7 @@ const senderMessageRepSlack = (args, remainingText) => {
       }
   })
 }
+
 const senderMessageSlack = (target, remainingText, event) => {
 
   async.waterfall([
