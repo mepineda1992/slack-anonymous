@@ -1,4 +1,4 @@
-FROM node:8.11
+FROM node:10-alpine
 RUN echo; echo "Starting slack-anonymous"
 
 ADD . ./
